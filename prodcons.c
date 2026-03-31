@@ -27,13 +27,13 @@ static ITEM buffer[BUFFER_SIZE];
 static void rsleep (int t);	    // already implemented (see below)
 static ITEM get_next_item (void);   // already implemented (see below)
 
-static pthread_mutex_t  buffer_mutex   = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t producer_condition = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t consumer_condition = PTHREAD_COND_INITIALIZER;
 
 static int input = 0;
 static int output = 0;
 static int count = 0; // current number of items in buffer
-static int items_consumed = 0;
 static ITEM next_expected = 0;
 
 
@@ -41,37 +41,45 @@ static ITEM next_expected = 0;
 static void * 
 producer (void * arg)
 {
+	// set the item to -1 to avoid the loop immediately terminating
 	ITEM item = -1;
 
-    while (item != NROF_ITEMS /* TODO: not all items produced */)
+    while (item != NROF_ITEMS)
     {
         // TODO: 
-        // * get the new item
+        	// * get the new item
+			// * put the item into buffer[]
+		
+		// get the next item and break if all items are given already
 		item = get_next_item();
 		if (item == NROF_ITEMS) {
 			break;
 		}
 
         rsleep (100);	// simulating all kind of activities...
+
+		// lock the mutex
+		pthread_mutex_lock(&buffer_mutex);
 		
-	// TODO:
-	      // * put the item into buffer[]
-		  
-	//
-        // follow this pseudocode (according to the ConditionSynchronization lecture):
-        pthread_mutex_lock (&buffer_mutex); //      mutex-lock;
-		//      while not condition-for-this-producer
+		// if buffer is full or this producer does not have the next item then wait
 		while (count == BUFFER_SIZE || item != next_expected) {
-        	pthread_cond_wait (&producer_condition, &buffer_mutex);//          wait-cv;
+        	pthread_cond_wait(&producer_condition, &buffer_mutex);
 		}
+
+		// put an item into the buffer
        	buffer[input] = item;
-		input = (input + 1) % BUFFER_SIZE;//      critical-section;
-		count ++;
+		input = (input + 1) % BUFFER_SIZE;
+		count++;
+		next_expected++;
+
+		// signal to the consumer that the buffer is not empty
+        pthread_cond_signal(&consumer_condition);
+
+		// broadcast to all the producers that they might have the next item now
 		pthread_cond_broadcast(&producer_condition);
-        pthread_cond_signal (&consuder_condition);//      possible-cv-signals;
-        pthread_mutex_unlock (&buffer_mutex);//      mutex-unlock;
-        //
-        // (see condition_test() in condition_basics.c how to use condition variables)
+
+		// release the mutex
+        pthread_mutex_unlock(&buffer_mutex);
     }
 	return (NULL);
 }
@@ -80,20 +88,37 @@ producer (void * arg)
 static void * 
 consumer (void * arg)
 {
-    while (true /* TODO: not all items retrieved from buffer[] */)
+	// counter of how many items have been processed
+	int items_consumed = 0;
+
+    while (items_consumed < NROF_ITEMS)
     {
         // TODO: 
 	      // * get the next item from buffer[]
 	      // * print the number to stdout
-        //
-        // follow this pseudocode (according to the ConditionSynchronization lecture):
-        //      mutex-lock;
-        //      while not condition-for-this-consumer
-        //          wait-cv;
-        //      critical-section;
-        //      possible-cv-signals;
-        //      mutex-unlock;
+
+		// lock the mutex
+		pthread_mutex_lock(&buffer_mutex);
+
+		// if buffer is empty then wait
+		while (count == 0) {
+			pthread_cond_wait(&consumer_condition, &buffer_mutex);
+		}
+
+		// take the next item
+		ITEM item = buffer[output];
+		output = (output + 1) % BUFFER_SIZE;
+		count--;
+		items_consumed++;
+
+		// signal producers that buffer space was freed
+		pthread_cond_signal(&producer_condition);
+
+		// release the mutex
+		pthread_mutex_unlock(&buffer_mutex);
 		
+		// process the item
+		printf("%d\n", item);
         rsleep (100);		// simulating all kind of activities...
     }
 	return (NULL);
@@ -101,11 +126,25 @@ consumer (void * arg)
 
 int main (void)
 {
-    // TODO: 
-    // * startup the producer threads and the consumer thread
-    // * wait until all threads are finished  
-    
-    return (0);
+	// create producer threads
+    pthread_t producer_threads[NROF_PRODUCERS];
+    for (int i = 0; i < NROF_PRODUCERS; i++) {
+        pthread_create(&producer_threads[i], NULL, producer, NULL);
+    }
+
+	// create consumer thread
+	pthread_t consumer_thread;
+    pthread_create(&consumer_thread, NULL, consumer, NULL);
+
+	// wait for producer threads to finish first, because consumer can only finish after all producers finished producing items
+    for (int i = 0; i < NROF_PRODUCERS; i++) {
+        pthread_join(producer_threads[i], NULL);
+    }
+
+	// wait for consumer thread to finish
+    pthread_join(consumer_thread, NULL);
+
+    return 0;
 }
 
 /*
