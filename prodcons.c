@@ -83,6 +83,24 @@ int main (void)
     // TODO: 
     // * startup the producer threads and the consumer thread
     // * wait until all threads are finished  
+
+	// create all producer threads
+	pthread_t producer_threads[NROF_PRODUCERS];
+	for (int i = 0; i < NROF_PRODUCERS; i++) {
+		pthread_create(&producer_threads[i], NULL, producer, NULL);
+	}
+
+	// create the consumer thread
+	pthread_t consumer_thread;
+	pthread_create(&consumer_thread, NULL, consumer, NULL);
+
+	// join the producer threads first, because they should all finish before the consumer thread finishes
+	for (int i = 0; i < NROF_PRODUCERS; i++) {
+		pthread_join(&producer_threads[i], NULL);
+	}
+
+	// join the consumer thread
+	pthread_join(&consumer_thread, NULL);
     
     return (0);
 }
