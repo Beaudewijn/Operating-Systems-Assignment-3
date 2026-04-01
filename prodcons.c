@@ -112,7 +112,7 @@ consumer (void * arg)
 		items_consumed++;
 
 		// signal producers that buffer space was freed
-		pthread_cond_signal(&producer_condition);
+		pthread_cond_broadcast(&producer_condition);
 
 		// release the mutex
 		pthread_mutex_unlock(&buffer_mutex);
