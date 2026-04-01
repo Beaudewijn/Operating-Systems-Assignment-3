@@ -28,8 +28,8 @@ static void rsleep (int t);	    // already implemented (see below)
 static ITEM get_next_item (void);   // already implemented (see below)
 
 static pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t buffer_not_full = PTHREAD_COND_INITIALIZER;
-static pthread_cond_t buffer_not_empty = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t producer_condition = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t consumer_condition = PTHREAD_COND_INITIALIZER;
 
 static int input = 0;
 static int output = 0;
@@ -151,7 +151,7 @@ int main (void)
     pthread_join(consumer_thread, NULL);
 
 	// print the number of broadcasts and signals
-	fprintf("Number of broadcasts: %d\nNumber of signals: %d", num_broadcasts, num_signals);
+	fprintf(stderr, "Number of broadcasts: %d\nNumber of signals: %d\n", num_broadcasts, num_signals);
 
     return 0;
 }

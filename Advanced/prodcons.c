@@ -171,7 +171,7 @@ int main (void)
     pthread_join(consumer_thread, NULL);
 
 	// print the number of broadcasts and signals
-	fprintf("Number of broadcasts: %d\nNumber of signals: %d", num_broadcasts, num_signals);
+	fprintf(stderr, "Number of broadcasts: %d\nNumber of signals: %d\n", num_broadcasts, num_signals);
 
     return 0;
 }
