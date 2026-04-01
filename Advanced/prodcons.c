@@ -37,6 +37,9 @@ static int count = 0; // current number of items in buffer
 static ITEM next_expected = 0; // next item that needs to be put into buffer to maintain ascending order
 static int producer_items[NROF_PRODUCERS]; // keeps track of what item every producer has
 
+static int num_broadcasts = 0;
+static int num_signals = 0;
+
 
 /* producer thread */
 static void * 
@@ -81,11 +84,13 @@ producer (void * arg)
 
 		// signal to the consumer that the buffer is not empty
         pthread_cond_signal(&buffer_not_empty);
+		num_signals++;
 
 		// signal to the producer that has the next item
 		for (int i = 0; i < NROF_PRODUCERS; i++) {
 			if (producer_items[i] == next_expected) {
 				pthread_cond_signal(&has_next_item[i]);
+				num_signals++;
 				break;
 			}
 		}
@@ -127,6 +132,7 @@ consumer (void * arg)
 		for (int i = 0; i < NROF_PRODUCERS; i++) {
 			if (producer_items[i] == next_expected) {
 				pthread_cond_signal(&has_next_item[i]);
+				num_signals++;
 				break;
 			}
 		}
@@ -163,6 +169,9 @@ int main (void)
 
 	// wait for consumer thread to finish
     pthread_join(consumer_thread, NULL);
+
+	// print the number of broadcasts and signals
+	fprintf("Number of broadcasts: %d\nNumber of signals: %d", num_broadcasts, num_signals);
 
     return 0;
 }

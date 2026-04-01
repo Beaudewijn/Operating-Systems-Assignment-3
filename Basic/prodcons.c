@@ -28,13 +28,16 @@ static void rsleep (int t);	    // already implemented (see below)
 static ITEM get_next_item (void);   // already implemented (see below)
 
 static pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t producer_condition = PTHREAD_COND_INITIALIZER;
-static pthread_cond_t consumer_condition = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t buffer_not_full = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t buffer_not_empty = PTHREAD_COND_INITIALIZER;
 
 static int input = 0;
 static int output = 0;
 static int count = 0; // current number of items in buffer
 static ITEM next_expected = 0;
+
+static int num_broadcasts = 0;
+static int num_signals = 0;
 
 
 /* producer thread */
@@ -74,9 +77,11 @@ producer (void * arg)
 
 		// signal to the consumer that the buffer is not empty
         pthread_cond_signal(&consumer_condition);
+		num_signals++;
 
 		// broadcast to all the producers that they might have the next item now
 		pthread_cond_broadcast(&producer_condition);
+		num_broadcasts++;
 
 		// release the mutex
         pthread_mutex_unlock(&buffer_mutex);
@@ -113,6 +118,7 @@ consumer (void * arg)
 
 		// signal producers that buffer space was freed
 		pthread_cond_broadcast(&producer_condition);
+		num_broadcasts++;
 
 		// release the mutex
 		pthread_mutex_unlock(&buffer_mutex);
@@ -143,6 +149,9 @@ int main (void)
 
 	// wait for consumer thread to finish
     pthread_join(consumer_thread, NULL);
+
+	// print the number of broadcasts and signals
+	fprintf("Number of broadcasts: %d\nNumber of signals: %d", num_broadcasts, num_signals);
 
     return 0;
 }
