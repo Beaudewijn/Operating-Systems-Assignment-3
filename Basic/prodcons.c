@@ -79,9 +79,11 @@ producer (void * arg)
         pthread_cond_signal(&consumer_condition);
 		num_signals++;
 
-		// broadcast to all the producers that they might have the next item now
-		pthread_cond_broadcast(&producer_condition);
-		num_broadcasts++;
+		// broadcast to all the producers that they might have the next item now, but only if the buffer is not full
+		if (count < BUFFER_SIZE) {
+			pthread_cond_broadcast(&producer_condition);
+			num_broadcasts++;
+		}
 
 		// release the mutex
         pthread_mutex_unlock(&buffer_mutex);

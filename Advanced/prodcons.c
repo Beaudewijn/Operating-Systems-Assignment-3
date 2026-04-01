@@ -86,12 +86,14 @@ producer (void * arg)
         pthread_cond_signal(&buffer_not_empty);
 		num_signals++;
 
-		// signal to the producer that has the next item
-		for (int i = 0; i < NROF_PRODUCERS; i++) {
-			if (producer_items[i] == next_expected) {
-				pthread_cond_signal(&has_next_item[i]);
-				num_signals++;
-				break;
+		// signal to the producer that has the next item, but only if the buffer is not full
+		if (count < BUFFER_SIZE) {
+			for (int i = 0; i < NROF_PRODUCERS; i++) {
+				if (producer_items[i] == next_expected) {
+					pthread_cond_signal(&has_next_item[i]);
+					num_signals++;
+					break;
+				}
 			}
 		}
 
