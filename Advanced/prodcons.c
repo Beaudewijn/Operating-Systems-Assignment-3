@@ -27,20 +27,24 @@ static ITEM buffer[BUFFER_SIZE];
 static void rsleep (int t);	    // already implemented (see below)
 static ITEM get_next_item (void);   // already implemented (see below)
 
-static pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_cond_t producer_condition = PTHREAD_COND_INITIALIZER;
-static pthread_cond_t consumer_condition = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t buffer_mutex = PTHREAD_MUTEX_INITIALIZER; // mutex ensures only one thread can access the buffer
+static pthread_cond_t buffer_not_full = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t buffer_not_empty = PTHREAD_COND_INITIALIZER;
+static pthread_cond_t has_next_item[NROF_PRODUCERS] = {[0 ... NROF_PRODUCERS - 1] = PTHREAD_COND_INITIALIZER};
 
-static int input = 0;
-static int output = 0;
+static int input = 0; // next index to place item in buffer
+static int output = 0; // next index to take item from buffer
 static int count = 0; // current number of items in buffer
-static ITEM next_expected = 0;
+static ITEM next_expected = 0; // next item that needs to be put into buffer to maintain ascending order
+static int producer_items[NROF_PRODUCERS]; // keeps track of what item every producer has
 
 
 /* producer thread */
 static void * 
 producer (void * arg)
 {
+	int id = *(int *)arg;
+
 	// set the item to -1 to avoid the loop immediately terminating
 	ITEM item = -1;
 
@@ -60,23 +64,36 @@ producer (void * arg)
 
 		// lock the mutex
 		pthread_mutex_lock(&buffer_mutex);
+
+		// let all other producers know the current item
+		producer_items[id] = item;
 		
 		// if buffer is full or this producer does not have the next item then wait
 		while (count == BUFFER_SIZE || item != next_expected) {
-        	pthread_cond_wait(&producer_condition, &buffer_mutex);
+        	if (count == BUFFER_SIZE) {
+				pthread_cond_wait(&buffer_not_full, &buffer_mutex);
+			} else {
+				pthread_cond_wait(&has_next_item[id], &buffer_mutex);
+			}
 		}
 
 		// put an item into the buffer
        	buffer[input] = item;
+		producer_items[id] = -1; // set back to empty
 		input = (input + 1) % BUFFER_SIZE;
 		count++;
 		next_expected++;
 
 		// signal to the consumer that the buffer is not empty
-        pthread_cond_signal(&consumer_condition);
+        pthread_cond_signal(&buffer_not_empty);
 
-		// broadcast to all the producers that they might have the next item now
-		pthread_cond_broadcast(&producer_condition);
+		// signal to the producer that has the next item
+		for (int i = 0; i < NROF_PRODUCERS; i++) {
+			if (producer_items[i] == next_expected) {
+				pthread_cond_signal(&has_next_item[i]);
+				break;
+			}
+		}
 
 		// release the mutex
         pthread_mutex_unlock(&buffer_mutex);
@@ -102,7 +119,7 @@ consumer (void * arg)
 
 		// if buffer is empty then wait
 		while (count == 0) {
-			pthread_cond_wait(&consumer_condition, &buffer_mutex);
+			pthread_cond_wait(&buffer_not_empty, &buffer_mutex);
 		}
 
 		// take the next item
@@ -112,7 +129,7 @@ consumer (void * arg)
 		items_consumed++;
 
 		// signal producers that buffer space was freed
-		pthread_cond_broadcast(&producer_condition);
+		pthread_cond_broadcast(&buffer_not_full);
 
 		// release the mutex
 		pthread_mutex_unlock(&buffer_mutex);
@@ -128,8 +145,11 @@ int main (void)
 {
 	// create producer threads
     pthread_t producer_threads[NROF_PRODUCERS];
+	int ids[NROF_PRODUCERS];
     for (int i = 0; i < NROF_PRODUCERS; i++) {
-        pthread_create(&producer_threads[i], NULL, producer, NULL);
+		ids[i] = i;
+		producer_items[i] = -1;
+        pthread_create(&producer_threads[i], NULL, producer, &ids[i]);
     }
 
 	// create consumer thread
