@@ -69,15 +69,20 @@ producer (void * arg)
         	pthread_cond_wait(&producer_condition, &buffer_mutex);
 		}
 
+		// if buffer was empty before, do not signal consumer
+		bool was_empty = (count == 0);
+
 		// put an item into the buffer
        	buffer[input] = item;
 		input = (input + 1) % BUFFER_SIZE;
 		count++;
 		next_expected++;
 
-		// signal to the consumer that the buffer is not empty
-        pthread_cond_signal(&consumer_condition);
-		num_signals++;
+		// signal to the consumer that the buffer is not empty if buffer was empty before
+		if (was_empty) {
+			pthread_cond_signal(&consumer_condition);
+			num_signals++;
+		}
 
 		// broadcast to all the producers that they might have the next item now, but only if the buffer is not full
 		if (count < BUFFER_SIZE) {
