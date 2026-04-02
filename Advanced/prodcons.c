@@ -129,18 +129,23 @@ consumer (void * arg)
 			pthread_cond_wait(&buffer_not_empty, &buffer_mutex);
 		}
 
+		// only signal producers if the buffer was full before, since otherwise they were not waiting
+		bool was_full = (count == BUFFER_SIZE);
+
 		// take the next item
 		ITEM item = buffer[output];
 		output = (output + 1) % BUFFER_SIZE;
 		count--;
 		items_consumed++;
 
-		// signal producer that has next expected item that buffer is no longer full
-		for (int i = 0; i < NROF_PRODUCERS; i++) {
-			if (producer_items[i] == next_expected) {
-				pthread_cond_signal(&has_next_item[i]);
-				num_signals++;
-				break;
+		// signal producer that has next expected item that buffer is no longer full but only if the buffer was full
+		if (was_full) {
+			for (int i = 0; i < NROF_PRODUCERS; i++) {
+				if (producer_items[i] == next_expected) {
+					pthread_cond_signal(&has_next_item[i]);
+					num_signals++;
+					break;
+				}
 			}
 		}
 

@@ -117,15 +117,20 @@ consumer (void * arg)
 			pthread_cond_wait(&consumer_condition, &buffer_mutex);
 		}
 
+		// only signal producers if the buffer was full before, since otherwise they were not waiting
+		bool was_full = (count == BUFFER_SIZE);
+
 		// take the next item
 		ITEM item = buffer[output];
 		output = (output + 1) % BUFFER_SIZE;
 		count--;
 		items_consumed++;
 
-		// signal producers that buffer space was freed
-		pthread_cond_broadcast(&producer_condition);
-		num_broadcasts++;
+		// signal producers that buffer space was freed but only if the buffer was full
+		if (was_full) {
+			pthread_cond_broadcast(&producer_condition);
+			num_broadcasts++;
+		}
 
 		// release the mutex
 		pthread_mutex_unlock(&buffer_mutex);
