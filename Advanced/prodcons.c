@@ -75,7 +75,7 @@ producer (void * arg)
 			pthread_cond_wait(&has_next_item[id], &buffer_mutex);
 		}
 
-		// if buffer was empty before, do not signal consumer
+		// if buffer was not empty before, do not signal consumer
 		bool was_empty = (count == 0);
 
 		// put an item into the buffer
